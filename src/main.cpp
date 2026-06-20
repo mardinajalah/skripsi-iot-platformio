@@ -18,31 +18,31 @@
 // Konfigurasi Layar OLED
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define OLED_RESET    -1
+#define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Konfigurasi WiFi (mengambil nilai dari macro .env yang disuntikkan)
 #ifndef SECRET_WIFI_SSID
-  #define SECRET_WIFI_SSID "DefaultWiFi"
+#define SECRET_WIFI_SSID "DefaultWiFi"
 #endif
 #ifndef SECRET_WIFI_PASS
-  #define SECRET_WIFI_PASS "DefaultPassword"
+#define SECRET_WIFI_PASS "DefaultPassword"
 #endif
 
-const char* ssid = SECRET_WIFI_SSID;
-const char* password = SECRET_WIFI_PASS;
+const char *ssid = SECRET_WIFI_SSID;
+const char *password = SECRET_WIFI_PASS;
 
 // Konfigurasi Firebase (mengambil nilai dari macro .env yang disuntikkan)
 #ifndef SECRET_FIREBASE_API_KEY
-  #define API_KEY "DefaultAPIKey"
+#define API_KEY "DefaultAPIKey"
 #else
-  #define API_KEY SECRET_FIREBASE_API_KEY
+#define API_KEY SECRET_FIREBASE_API_KEY
 #endif
 
 #ifndef SECRET_FIREBASE_DB_URL
-  #define DATABASE_URL "DefaultDbURL"
+#define DATABASE_URL "DefaultDbURL"
 #else
-  #define DATABASE_URL SECRET_FIREBASE_DB_URL
+#define DATABASE_URL SECRET_FIREBASE_DB_URL
 #endif
 
 // Definisi Objek Firebase
@@ -55,10 +55,15 @@ int led = 25;
 int saklar = 26;
 int relay = 27;
 
-int statusTerakhir = -2; 
+int statusTerakhir = -2;
+
+int statusLampuTerakhir = -1;
+
+String statusApp = "OFF";
 
 // Fungsi untuk sinkronisasi waktu dengan server NTP Google/Indonesia
-void sinkronisasiWaktu() {
+void sinkronisasiWaktu()
+{
   Serial.println("Sinkronisasi waktu dimulai...");
 
   configTime(25200, 0, "pool.ntp.org", "time.nist.gov");
@@ -66,7 +71,8 @@ void sinkronisasiWaktu() {
   time_t now = time(nullptr);
 
   int retry = 0;
-  while (now < 100000 && retry < 20) {
+  while (now < 100000 && retry < 20)
+  {
     delay(500);
     Serial.print(".");
     now = time(nullptr);
@@ -75,20 +81,25 @@ void sinkronisasiWaktu() {
 
   Serial.println();
 
-  if (now > 100000) {
+  if (now > 100000)
+  {
     Serial.println("Waktu berhasil disinkronkan!");
     Serial.println(ctime(&now));
-  } else {
+  }
+  else
+  {
     Serial.println("Gagal sinkronisasi waktu!");
   }
 }
 
-void cekWiFi() {
+void cekWiFi()
+{
 
   static unsigned long lastReconnectAttempt = 0;
 
   if (WiFi.status() != WL_CONNECTED &&
-      millis() - lastReconnectAttempt > 5000) {
+      millis() - lastReconnectAttempt > 5000)
+  {
 
     lastReconnectAttempt = millis();
 
@@ -98,29 +109,34 @@ void cekWiFi() {
     WiFi.begin(ssid, password);
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
+  {
 
     static bool sudahCetak = false;
 
-    if (!sudahCetak) {
+    if (!sudahCetak)
+    {
       Serial.println("WiFi berhasil terhubung kembali!");
       Serial.print("IP Address: ");
       Serial.println(WiFi.localIP());
 
       sudahCetak = true;
     }
-
-  } else {
+  }
+  else
+  {
     static bool sudahCetakPutus = false;
 
-    if (!sudahCetakPutus) {
+    if (!sudahCetakPutus)
+    {
       Serial.println("WiFi DISCONNECTED!");
       sudahCetakPutus = true;
     }
   }
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
 
   delay(2000);
@@ -130,7 +146,7 @@ void setup() {
   Serial.println("=================================");
 
   pinMode(led, OUTPUT);
-  pinMode(saklar, INPUT_PULLUP); 
+  pinMode(saklar, INPUT_PULLUP);
   pinMode(relay, OUTPUT);
 
   // Set kondisi awal hardware
@@ -138,9 +154,11 @@ void setup() {
   digitalWrite(led, LOW);
 
   // Inisialisasi OLED
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+  {
     Serial.println(F("OLED gagal diinisialisasi"));
-    for(;;); 
+    for (;;)
+      ;
   }
 
   // Tampilan OLED: Connecting WiFi
@@ -156,7 +174,8 @@ void setup() {
 
   WiFi.begin(ssid, password);
 
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     delay(500);
     Serial.print(".");
   }
@@ -171,7 +190,7 @@ void setup() {
   display.setCursor(0, 0);
   display.println("Syncing Time Server...");
   display.display();
-  
+
   // Panggil fungsi sinkronisasi waktu sebelum inisialisasi Firebase
   sinkronisasiWaktu();
 
@@ -202,19 +221,22 @@ void setup() {
   Serial.println("Firebase begin...");
   Firebase.begin(&config, &auth);
 
-
   unsigned long startTime = millis();
 
-  while (!Firebase.ready() && millis() - startTime < 30000) {
+  while (!Firebase.ready() && millis() - startTime < 30000)
+  {
     Serial.print(".");
     delay(500);
   }
 
   Serial.println();
 
-  if (Firebase.ready()) {
+  if (Firebase.ready())
+  {
     Serial.println("Firebase READY!");
-  } else {
+  }
+  else
+  {
     Serial.println("Firebase TIDAK READY!");
   }
 
@@ -225,90 +247,94 @@ void setup() {
   delay(1500);
 }
 
-void loop() {
-   // Cek dan reconnect WiFi jika terputus
+void loop()
+{
+  // Cek koneksi WiFi
   cekWiFi();
 
-  // 1. Baca kondisi dari saklar fisik
+  // 1. baca saklar manual
   int statusSaklar = digitalRead(saklar);
 
-  // 2. Logika kendali LED & Relay
-  if (statusSaklar == LOW) {
-    digitalWrite(led, HIGH);   
-    digitalWrite(relay, LOW);  
-  } else {
-    digitalWrite(led, LOW);    
-    digitalWrite(relay, HIGH); 
-  }
-
-  // 3. KIRIM DATA KE FIREBASE 
-  if (statusSaklar != statusTerakhir) {
-    
-    if (Firebase.ready()) {
-      String statusStr = (statusSaklar == LOW) ? "ON" : "OFF";
-      
-      Serial.println("Mencoba mengirim data ke Firebase...");
-      
-      // Kirim Status String ke path /kontrol/saklar
-      if (Firebase.RTDB.setString(&fbdo, "/kontrol/saklar", statusStr)) {
-        Serial.println("=> SUKSES: Data string terupdate di Firebase!");
-        
-        // Kirim Status Integer (1 atau 0) ke path /kontrol/led_relay_status
-        Firebase.RTDB.setInt(&fbdo, "/kontrol/led_relay_status", (statusSaklar == LOW) ? 1 : 0);
-        
-        statusTerakhir = statusSaklar;
-      } else {
-        Serial.print("=> GAGAL kirim data. Alasan: ");
-        Serial.println(fbdo.errorReason());
-      }
-      
-    } else {
-      Serial.println("Firebase belum ready!");
-      Serial.print("Error Firebase: ");
-      Serial.println(fbdo.errorReason());
+  // 2. baca perintah aplikasi dari Firebase
+  if (Firebase.ready())
+  {
+    if (Firebase.RTDB.getString(&fbdo, "/kontrol/app"))
+    {
+      statusApp = fbdo.stringData();
     }
   }
 
-  // 4. Menampilkan Status Realtime di OLED
+  // 3. logika hybrid
+
+  bool lampuNyala = false;
+
+  if (statusSaklar == LOW || statusApp == "ON")
+  {
+    lampuNyala = true;
+  }
+
+  // relay active LOW
+
+  if (lampuNyala)
+  {
+    digitalWrite(led, HIGH);
+    digitalWrite(relay, LOW);
+  }
+  else
+  {
+    digitalWrite(led, LOW);
+
+    digitalWrite(relay, HIGH);
+  }
+
+  // 4. kirim status sistem ke Firebase
+
+  int statusLampuSekarang = lampuNyala ? 1 : 0;
+
+  if ((statusSaklar != statusTerakhir || statusLampuSekarang != statusLampuTerakhir) && Firebase.ready())
+  {
+    String statusStr = (statusSaklar == LOW) ? "ON" : "OFF";
+
+    Firebase.RTDB.setString(&fbdo, "/kontrol/saklar", statusStr);
+
+    Firebase.RTDB.setInt(&fbdo, "/kontrol/led_relay_status", statusLampuSekarang);
+
+    statusTerakhir = statusSaklar;
+
+    statusLampuTerakhir = statusLampuSekarang;
+
+    Serial.println("Status Firebase diperbarui");
+  }
+
+  // OLED
+
   display.clearDisplay();
+
   display.setCursor(0, 0);
 
-  // Status WiFi
   display.print("WiFi : ");
 
-  if (WiFi.status() == WL_CONNECTED) {
-    display.println("Connected");
-  } else {
-    display.println("Disconnected");
-  }
+  display.println(WiFi.status() == WL_CONNECTED ? "ON" : "OFF");
 
-  // Status Firebase
   display.print("FB   : ");
 
-  if (WiFi.status() == WL_CONNECTED && Firebase.ready()) {
-    display.println("Connected");
-  } else {
-    display.println("Disconnected");
-  }
+  display.println(Firebase.ready() ? "ON" : "OFF");
 
   display.println("----------------");
 
-  // RSSI WiFi
-  if (WiFi.status() == WL_CONNECTED) {
-    display.print("RSSI : ");
-    display.println(WiFi.RSSI());
-  }
+  display.print("SW : ");
 
-  display.print("SW   : ");
   display.println(statusSaklar == LOW ? "ON" : "OFF");
 
-  display.print("LED  : ");
-  display.println(statusSaklar == LOW ? "ON" : "OFF");
+  display.print("APP: ");
 
-  display.print("RLY  : ");
-  display.println(statusSaklar == LOW ? "ON" : "OFF");
+  display.println(statusApp);
+
+  display.print("LAMP:");
+
+  display.println(lampuNyala ? "ON" : "OFF");
 
   display.display();
 
-  delay(200); 
+  delay(200);
 }
