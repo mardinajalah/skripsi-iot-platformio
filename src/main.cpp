@@ -55,11 +55,15 @@ int led = 25;
 int saklar = 26;
 int relay = 27;
 
-int statusTerakhir = -2;
+int statusSaklarTerakhir = HIGH;
+int statusSaklarFirebaseTerakhir = -1;
 
 int statusLampuTerakhir = -1;
+int statusPerintahFirebaseTerakhir = -1;
 
 String statusApp = "OFF";
+
+bool lampuNyala = false;
 
 // Fungsi untuk sinkronisasi waktu dengan server NTP Google/Indonesia
 void sinkronisasiWaktu()
@@ -152,6 +156,7 @@ void setup()
   // Set kondisi awal hardware
   digitalWrite(relay, HIGH); // Active Low (HIGH = MATI)
   digitalWrite(led, LOW);
+  statusSaklarTerakhir = digitalRead(saklar);
 
   // Inisialisasi OLED
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
@@ -254,23 +259,55 @@ void loop()
 
   // 1. baca saklar manual
   int statusSaklar = digitalRead(saklar);
+  bool saklarAktif = statusSaklar == LOW;
+  bool saklarBerubah = statusSaklar != statusSaklarTerakhir;
 
-  // 2. baca perintah aplikasi dari Firebase
-  if (Firebase.ready())
+  // 2. saklar fisik menjadi prioritas utama.
+  // Saat saklar ON, aplikasi dikunci dan perintah Firebase diabaikan.
+  if (saklarBerubah)
   {
-    if (Firebase.RTDB.getString(&fbdo, "/kontrol/app"))
+    lampuNyala = saklarAktif;
+    statusSaklarTerakhir = statusSaklar;
+    statusApp = lampuNyala ? "ON" : "OFF";
+
+    Serial.print("Perintah saklar manual diterima: ");
+    Serial.println(statusApp);
+
+    if (Firebase.ready())
     {
-      statusApp = fbdo.stringData();
+      Firebase.RTDB.setString(&fbdo, "/kontrol/app", statusApp);
+      Firebase.RTDB.setInt(&fbdo, "/kontrol/led_relay_status", lampuNyala ? 1 : 0);
+      statusPerintahFirebaseTerakhir = lampuNyala ? 1 : 0;
     }
   }
-
-  // 3. logika hybrid
-
-  bool lampuNyala = false;
-
-  if (statusSaklar == LOW || statusApp == "ON")
+  else if (saklarAktif)
   {
     lampuNyala = true;
+    statusApp = "ON";
+
+    if (Firebase.ready() && Firebase.RTDB.getInt(&fbdo, "/kontrol/led_relay_status"))
+    {
+      statusPerintahFirebaseTerakhir = fbdo.intData();
+    }
+  }
+  else if (Firebase.ready())
+  {
+    // 3. saat saklar OFF, aplikasi boleh menjadi sumber perintah.
+    if (Firebase.RTDB.getInt(&fbdo, "/kontrol/led_relay_status"))
+    {
+      int statusFirebase = fbdo.intData();
+
+      if ((statusFirebase == 0 || statusFirebase == 1) &&
+          statusFirebase != statusPerintahFirebaseTerakhir)
+      {
+        statusPerintahFirebaseTerakhir = statusFirebase;
+        lampuNyala = statusFirebase == 1;
+        statusApp = lampuNyala ? "ON" : "OFF";
+
+        Serial.print("Perintah aplikasi diterima: ");
+        Serial.println(statusApp);
+      }
+    }
   }
 
   // relay active LOW
@@ -291,17 +328,22 @@ void loop()
 
   int statusLampuSekarang = lampuNyala ? 1 : 0;
 
-  if ((statusSaklar != statusTerakhir || statusLampuSekarang != statusLampuTerakhir) && Firebase.ready())
+  if ((statusSaklar != statusSaklarFirebaseTerakhir ||
+       statusLampuSekarang != statusLampuTerakhir ||
+       statusPerintahFirebaseTerakhir != statusLampuSekarang) &&
+      Firebase.ready())
   {
     String statusStr = (statusSaklar == LOW) ? "ON" : "OFF";
 
     Firebase.RTDB.setString(&fbdo, "/kontrol/saklar", statusStr);
 
     Firebase.RTDB.setInt(&fbdo, "/kontrol/led_relay_status", statusLampuSekarang);
+    Firebase.RTDB.setString(&fbdo, "/kontrol/app", lampuNyala ? "ON" : "OFF");
 
-    statusTerakhir = statusSaklar;
+    statusSaklarFirebaseTerakhir = statusSaklar;
 
     statusLampuTerakhir = statusLampuSekarang;
+    statusPerintahFirebaseTerakhir = statusLampuSekarang;
 
     Serial.println("Status Firebase diperbarui");
   }
