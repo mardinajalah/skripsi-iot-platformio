@@ -255,15 +255,14 @@ void loop()
   bool saklarAktif = statusSaklar == LOW;
   bool saklarBerubah = statusSaklar != statusSaklarTerakhir;
 
-  // 2. saklar fisik menjadi prioritas utama.
-  // Saat saklar ON, aplikasi dikunci dan perintah Firebase diabaikan.
+  // 2. Saklar fisik sebagai toggle aksi dinamis
   if (saklarBerubah)
   {
-    lampuNyala = saklarAktif;
+    lampuNyala = !lampuNyala;
     statusSaklarTerakhir = statusSaklar;
     statusApp = lampuNyala ? "ON" : "OFF";
 
-    Serial.print("Perintah saklar manual diterima: ");
+    Serial.print("Perintah saklar manual diterima (Toggle): ");
     Serial.println(statusApp);
 
     if (Firebase.ready())
@@ -271,21 +270,12 @@ void loop()
       Firebase.RTDB.setString(&fbdo, "/kontrol/app", statusApp);
       Firebase.RTDB.setInt(&fbdo, "/kontrol/led_relay_status", lampuNyala ? 1 : 0);
       statusPerintahFirebaseTerakhir = lampuNyala ? 1 : 0;
-    }
-  }
-  else if (saklarAktif)
-  {
-    lampuNyala = true;
-    statusApp = "ON";
-
-    if (Firebase.ready() && Firebase.RTDB.getInt(&fbdo, "/kontrol/led_relay_status"))
-    {
-      statusPerintahFirebaseTerakhir = fbdo.intData();
+      statusLampuTerakhir = lampuNyala ? 1 : 0;
     }
   }
   else if (Firebase.ready())
   {
-    // 3. saat saklar OFF, aplikasi boleh menjadi sumber perintah (cek setiap 1 detik).
+    // 3. Saat saklar fisik diam, periksa perintah dari aplikasi (Firebase) setiap 1 detik
     static unsigned long lastQueryMillis = 0;
     if (millis() - lastQueryMillis > 1000)
     {
@@ -298,6 +288,7 @@ void loop()
             statusFirebase != statusPerintahFirebaseTerakhir)
         {
           statusPerintahFirebaseTerakhir = statusFirebase;
+          statusLampuTerakhir = statusFirebase;
           lampuNyala = statusFirebase == 1;
           statusApp = lampuNyala ? "ON" : "OFF";
 
