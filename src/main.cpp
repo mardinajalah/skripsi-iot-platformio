@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include "time.h" // Library bawaan untuk sinkronisasi waktu internet
+#include "time.h" // Library bawaan untuk sinkronisasi waktu internetlea
 
 // Definisikan kontrol flash tepat sebelum library Firebase dipanggil
 #define FIREBASE_USE_PSRAM
@@ -98,43 +98,35 @@ void sinkronisasiWaktu()
 
 void cekWiFi()
 {
-
   static unsigned long lastReconnectAttempt = 0;
-
-  if (WiFi.status() != WL_CONNECTED &&
-      millis() - lastReconnectAttempt > 5000)
-  {
-
-    lastReconnectAttempt = millis();
-
-    Serial.println("WiFi terputus! Mencoba reconnect...");
-
-    WiFi.disconnect();
-    WiFi.begin(ssid, password);
-  }
+  static bool wasConnected = true;
 
   if (WiFi.status() == WL_CONNECTED)
   {
-
-    static bool sudahCetak = false;
-
-    if (!sudahCetak)
+    if (!wasConnected)
     {
       Serial.println("WiFi berhasil terhubung kembali!");
       Serial.print("IP Address: ");
       Serial.println(WiFi.localIP());
-
-      sudahCetak = true;
+      wasConnected = true;
     }
   }
   else
   {
-    static bool sudahCetakPutus = false;
-
-    if (!sudahCetakPutus)
+    if (wasConnected)
     {
       Serial.println("WiFi DISCONNECTED!");
-      sudahCetakPutus = true;
+      wasConnected = false;
+      lastReconnectAttempt = millis(); // Start cooldown timer
+    }
+
+    // Try to reconnect every 30 seconds
+    if (millis() - lastReconnectAttempt > 30000)
+    {
+      lastReconnectAttempt = millis();
+      Serial.println("Mencoba menghubungkan kembali ke WiFi...");
+      WiFi.disconnect();
+      WiFi.begin(ssid, password);
     }
   }
 }
@@ -177,6 +169,7 @@ void setup()
   // Memulai WiFi
   Serial.println("Menghubungkan WiFi...");
 
+  WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED)
@@ -292,20 +285,25 @@ void loop()
   }
   else if (Firebase.ready())
   {
-    // 3. saat saklar OFF, aplikasi boleh menjadi sumber perintah.
-    if (Firebase.RTDB.getInt(&fbdo, "/kontrol/led_relay_status"))
+    // 3. saat saklar OFF, aplikasi boleh menjadi sumber perintah (cek setiap 1 detik).
+    static unsigned long lastQueryMillis = 0;
+    if (millis() - lastQueryMillis > 1000)
     {
-      int statusFirebase = fbdo.intData();
-
-      if ((statusFirebase == 0 || statusFirebase == 1) &&
-          statusFirebase != statusPerintahFirebaseTerakhir)
+      lastQueryMillis = millis();
+      if (Firebase.RTDB.getInt(&fbdo, "/kontrol/led_relay_status"))
       {
-        statusPerintahFirebaseTerakhir = statusFirebase;
-        lampuNyala = statusFirebase == 1;
-        statusApp = lampuNyala ? "ON" : "OFF";
+        int statusFirebase = fbdo.intData();
 
-        Serial.print("Perintah aplikasi diterima: ");
-        Serial.println(statusApp);
+        if ((statusFirebase == 0 || statusFirebase == 1) &&
+            statusFirebase != statusPerintahFirebaseTerakhir)
+        {
+          statusPerintahFirebaseTerakhir = statusFirebase;
+          lampuNyala = statusFirebase == 1;
+          statusApp = lampuNyala ? "ON" : "OFF";
+
+          Serial.print("Perintah aplikasi diterima: ");
+          Serial.println(statusApp);
+        }
       }
     }
   }
@@ -346,6 +344,19 @@ void loop()
     statusPerintahFirebaseTerakhir = statusLampuSekarang;
 
     Serial.println("Status Firebase diperbarui");
+  }
+
+  // 5. Kirim Heartbeat ke Firebase setiap 5 detik
+  static unsigned long lastHeartbeatMillis = 0;
+  if (millis() - lastHeartbeatMillis > 5000)
+  {
+    lastHeartbeatMillis = millis();
+    if (WiFi.status() == WL_CONNECTED && Firebase.ready())
+    {
+      static int heartbeatCount = 0;
+      heartbeatCount++;
+      Firebase.RTDB.setInt(&fbdo, "/kontrol/heartbeat", heartbeatCount);
+    }
   }
 
   // OLED
