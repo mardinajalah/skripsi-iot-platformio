@@ -57,6 +57,9 @@ int led = 25;
 int saklar = 26;
 int relay = 27;
 
+const int RELAY_ON_LEVEL = HIGH;
+const int RELAY_OFF_LEVEL = LOW;
+
 int statusSaklarTerakhir = HIGH;
 int statusSaklarFirebaseTerakhir = -1;
 
@@ -66,6 +69,12 @@ int statusPerintahFirebaseTerakhir = -1;
 String statusApp = "OFF";
 
 bool lampuNyala = false;
+
+void setLampuHardware(bool nyala)
+{
+  digitalWrite(led, nyala ? HIGH : LOW);
+  digitalWrite(relay, nyala ? RELAY_ON_LEVEL : RELAY_OFF_LEVEL);
+}
 
 // Fungsi untuk sinkronisasi waktu dengan server NTP Google/Indonesia
 void sinkronisasiWaktu()
@@ -153,16 +162,7 @@ void setup()
   preferences.end();
 
   // Set kondisi awal hardware berdasarkan data lokal secara instan!
-  if (lampuNyala)
-  {
-    digitalWrite(led, HIGH);
-    digitalWrite(relay, LOW); // Active Low
-  }
-  else
-  {
-    digitalWrite(led, LOW);
-    digitalWrite(relay, HIGH); // Active Low
-  }
+  setLampuHardware(lampuNyala);
   statusSaklarTerakhir = digitalRead(saklar);
   statusApp = lampuNyala ? "ON" : "OFF";
   statusLampuTerakhir = lampuNyala ? 1 : 0;
@@ -317,17 +317,8 @@ void loop()
     }
   }
 
-  // Set hardware state (relay active LOW)
-  if (lampuNyala)
-  {
-    digitalWrite(led, HIGH);
-    digitalWrite(relay, LOW);
-  }
-  else
-  {
-    digitalWrite(led, LOW);
-    digitalWrite(relay, HIGH);
-  }
+  // Set hardware state
+  setLampuHardware(lampuNyala);
 
   // 4. Kirim status sistem ke Firebase jika posisi saklar fisik berubah
   if (statusSaklar != statusSaklarFirebaseTerakhir && Firebase.ready())
