@@ -210,7 +210,7 @@ void loop()
 
   // 1. Baca saklar manual dengan debounce.
   int pembacaanSaklar = digitalRead(saklar);
-  bool saklarDitekan = false;
+  bool posisiSaklarBerubah = false;
 
   if (pembacaanSaklar != pembacaanSaklarTerakhir)
   {
@@ -222,18 +222,18 @@ void loop()
       pembacaanSaklar != statusSaklarTerakhir)
   {
     statusSaklarTerakhir = pembacaanSaklar;
-    saklarDitekan = statusSaklarTerakhir == SAKLAR_PRESSED_LEVEL;
+    posisiSaklarBerubah = true;
   }
 
   int statusSaklar = statusSaklarTerakhir;
 
-  // 2. Saklar fisik sebagai toggle aksi dinamis (Lokal + Simpan Memory)
-  if (saklarDitekan)
+  // 2. Saklar fisik sebagai pemicu toggle fleksibel (Lokal + Simpan Memory)
+  if (posisiSaklarBerubah)
   {
     lampuNyala = !lampuNyala;
     statusApp = lampuNyala ? "ON" : "OFF";
 
-    Serial.print("Perintah saklar manual diterima (Toggle): ");
+    Serial.print("Saklar manual memicu toggle fleksibel: ");
     Serial.println(statusApp);
 
     // Simpan ke memori lokal secara instan
@@ -339,17 +339,19 @@ void loop()
   // Set hardware state
   setLampuHardware(lampuNyala);
 
-  // 4. Kirim status sistem ke Firebase jika posisi saklar fisik berubah
-  if (statusSaklar != statusSaklarFirebaseTerakhir && Firebase.ready())
+  int statusLampuSekarang = lampuNyala ? 1 : 0;
+
+  // 4. Kirim status saklar logis ke Firebase. Status ini mengikuti lampu,
+  // bukan posisi fisik, agar aplikasi dan saklar memakai satu keadaan yang sama.
+  if (statusLampuSekarang != statusSaklarFirebaseTerakhir && Firebase.ready())
   {
-    String statusStr = (statusSaklar == LOW) ? "ON" : "OFF";
+    String statusStr = lampuNyala ? "ON" : "OFF";
     Firebase.RTDB.setString(&fbdo, "/kontrol/saklar", statusStr);
-    statusSaklarFirebaseTerakhir = statusSaklar;
-    Serial.println("Status saklar fisik diperbarui di Firebase");
+    statusSaklarFirebaseTerakhir = statusLampuSekarang;
+    Serial.println("Status saklar logis diperbarui di Firebase");
   }
 
   // Kirim status lampu ke Firebase jika tidak cocok (sinkronisasi darurat)
-  int statusLampuSekarang = lampuNyala ? 1 : 0;
   if (statusLampuSekarang != statusLampuTerakhir && Firebase.ready() && firstSyncDone)
   {
     Firebase.RTDB.setInt(&fbdo, "/kontrol/led_relay_status", statusLampuSekarang);
