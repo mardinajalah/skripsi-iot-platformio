@@ -57,10 +57,14 @@ int led = 25;
 int saklar = 26;
 int relay = 27;
 
+const int SAKLAR_PRESSED_LEVEL = LOW;
+const unsigned long SAKLAR_DEBOUNCE_MS = 60;
 const int RELAY_ON_LEVEL = HIGH;
 const int RELAY_OFF_LEVEL = LOW;
 
 int statusSaklarTerakhir = HIGH;
+int pembacaanSaklarTerakhir = HIGH;
+unsigned long waktuSaklarBerubah = 0;
 int statusSaklarFirebaseTerakhir = -1;
 
 int statusLampuTerakhir = -1;
@@ -164,6 +168,7 @@ void setup()
   // Set kondisi awal hardware berdasarkan data lokal secara instan!
   setLampuHardware(lampuNyala);
   statusSaklarTerakhir = digitalRead(saklar);
+  pembacaanSaklarTerakhir = statusSaklarTerakhir;
   statusApp = lampuNyala ? "ON" : "OFF";
   statusLampuTerakhir = lampuNyala ? 1 : 0;
   statusPerintahFirebaseTerakhir = lampuNyala ? 1 : 0;
@@ -203,15 +208,29 @@ void loop()
   // Cek koneksi WiFi
   cekWiFi();
 
-  // 1. baca saklar manual
-  int statusSaklar = digitalRead(saklar);
-  bool saklarBerubah = statusSaklar != statusSaklarTerakhir;
+  // 1. Baca saklar manual dengan debounce.
+  int pembacaanSaklar = digitalRead(saklar);
+  bool saklarDitekan = false;
+
+  if (pembacaanSaklar != pembacaanSaklarTerakhir)
+  {
+    waktuSaklarBerubah = millis();
+    pembacaanSaklarTerakhir = pembacaanSaklar;
+  }
+
+  if ((millis() - waktuSaklarBerubah) > SAKLAR_DEBOUNCE_MS &&
+      pembacaanSaklar != statusSaklarTerakhir)
+  {
+    statusSaklarTerakhir = pembacaanSaklar;
+    saklarDitekan = statusSaklarTerakhir == SAKLAR_PRESSED_LEVEL;
+  }
+
+  int statusSaklar = statusSaklarTerakhir;
 
   // 2. Saklar fisik sebagai toggle aksi dinamis (Lokal + Simpan Memory)
-  if (saklarBerubah)
+  if (saklarDitekan)
   {
     lampuNyala = !lampuNyala;
-    statusSaklarTerakhir = statusSaklar;
     statusApp = lampuNyala ? "ON" : "OFF";
 
     Serial.print("Perintah saklar manual diterima (Toggle): ");
